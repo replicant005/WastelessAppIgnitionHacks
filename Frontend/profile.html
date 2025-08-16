@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Profile | WasteLess</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="profile.css" />
+  <script src="auth.js"></script>
+</head>
+<body>
+  <div include-html="header.html"></div>
+
+  <main class="pf-main">
+    <div class="pf-card">
+      <!-- hero -->
+      <section class="pf-hero">
+        <div class="pf-avatar" aria-hidden="true">👤</div>
+        <h1 id="welcomeText" class="pf-title">Welcome, User</h1>
+      </section>
+
+      <!-- tabs -->
+      <nav class="pf-tabs" aria-label="Profile sections">
+        <div class="pf-tab-buttons">
+          <button class="pf-tab active" data-tab="posts">Posts</button>
+          <button class="pf-tab" data-tab="claimed">Claimed</button>
+          <button class="pf-tab" data-tab="stats">Stats</button>
+        </div>
+        <div id="savedMetric" class="pf-metric" aria-live="polite"></div>
+      </nav>
+
+      <!-- posts panel -->
+      <section id="postsPanel">
+        <div id="postsGrid" class="pf-grid">
+          <p class="pf-empty">Loading...</p>
+        </div>
+      </section>
+
+      <!-- claimed panel -->
+      <section id="claimedPanel" hidden>
+        <div id="claimedGrid" class="pf-grid">
+          <p class="pf-empty">No claimed items yet</p>
+        </div>
+      </section>
+
+      <!-- stats panel -->
+      <section id="statsPanel" hidden>
+        <div class="pf-stats">
+          <div class="pf-stat"><span id="statPosts">0</span><small>Posts</small></div>
+          <div class="pf-stat"><span id="statUpcoming">0</span><small>Not expired</small></div>
+          <div class="pf-stat"><span id="statExpired">0</span><small>Expired</small></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div include-html="footer.html"></div>
+  <script src="main.js"></script>
+
+  <script>
+    // ————— basic helpers
+    const qs = s => document.querySelector(s);
+    const qsa = s => Array.from(document.querySelectorAll(s));
+    const username = localStorage.getItem("username") || "User";
+    const userId = localStorage.getItem("userId");
+    const token = localStorage.getItem("token");
+
+    // welcome
+    qs("#welcomeText").textContent = `Welcome, ${username}`;
+
+    // tabs
+    qsa(".pf-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        qsa(".pf-tab").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const tab = btn.dataset.tab;
+        qs("#postsPanel").hidden   = tab !== "posts";
+        qs("#claimedPanel").hidden = tab !== "claimed";
+        qs("#statsPanel").hidden   = tab !== "stats";
+      });
+    });
+
+    // date helpers
+    function daysLeft(iso) {
+      if (!iso) return null;
+      const now = new Date();
+      const d = new Date(iso);
+      const diff = Math.ceil((d - now) / (1000*60*60*24));
+      return diff;
+    }
+    function expiryBadge(iso) {
+      const d = daysLeft(iso);
+      if (d == null) return {text:"", cls:"gray"};
+      if (d <= 0)    return {text:"expired", cls:"red"};
+      if (d === 1)   return {text:"1 day left", cls:"green"};
+      return {text:`${d} days left`, cls:"green"};
+    }
+
+    // quantity helpers (for the small number on card)
+    function extractCount(qty) {
+      if (!qty) return null;
+      const m = (qty+"").match(/(\d+(\.\d+)?)/);
+      return m ? m[1] : null;
+    }
+
+    // convert quantity text to kg where possible for "saved" metric
+    function qtyToKg(qty) {
+      if (!qty) return 0;
+      const m = (qty+"").toLowerCase().match(/(\d+(\.\d+)?)/);
+      if (!m) return 0;
+      const n = parseFloat(m[1]);
+      if (isNaN(n)) return 0;
+      if (/kg/.test(qty)) return n;
+      if (/\b(g|gram)/.test(qty)) return n / 1000;
+      if (/\blb|pound/.test(qty)) return n * 0.453592;
+      return 0; // portions/loaf/cups -> ignore
+    }
+
+    function robustUserMatch(item, uid) {
+      return (
+        item.user === uid ||
+        item.userId === uid ||
+        (item.user && item.user._id === uid) ||
+        (item.user && item.user.id === uid)
+      );
+    }
+
+    function cardTemplate(item) {
+      const badge = expiryBadge(item.expiryDate || item.expiresAt);
+      const count = extractCount(item.quantity);
+      return `
+        <article class="pf-card-item">
+          <img src="${item.imageUrl || item.photoUrl || 'https://picsum.photos/600?food'}" alt="${item.name || item.title || 'Food'}">
+          <div class="pf-item-info">
+            <div class="pf-item-row">
+              <h3 class="pf-item-title">${item.name || item.title || "Untitled"}</h3>
+              ${count ? `<span class="pf-count">${count}</span>` : ""}
+            </div>
+            <div class="pf-item-sub">${item.quantity || ""}</div>
+            <div class="pf-badges">
+              <span class="pf-badge ${badge.cls}">${badge.text}</span>
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    async function fetchUserPosts() {
+      // try server-side filter first (if your API supports it)
+      const base = "http://localhost:5000/api/food";
+      const urls = userId ? [`${base}?user=${encodeURIComponent(userId)}`, base] : [base];
+      for (const url of urls) {
+        try {
+          const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+          if (!res.ok) throw new Error("bad status");
+          const data = await res.json();
+          // if this was the all-items endpoint, filter client-side
+          const mine = userId ? data.filter(it => robustUserMatch(it, userId)) : data;
+          if (mine.length || url.endsWith(`?user=${encodeURIComponent(userId)}`)) return mine;
+          // otherwise fall through and try the next url
+        } catch (e) { /* try next */ }
+      }
+      return [];
+    }
+
+    function renderPosts(items) {
+      const grid = qs("#postsGrid");
+      if (!items.length) {
+        grid.innerHTML = `<p class="pf-empty">No entries to show here</p>`;
+        return;
+      }
+      grid.innerHTML = items.map(cardTemplate).join("");
+
+      // stats & metric
+      const expired = items.filter(i => (daysLeft(i.expiryDate || i.expiresAt) ?? 0) <= 0).length;
+      const upcoming = items.length - expired;
+      qs("#statPosts").textContent = items.length;
+      qs("#statUpcoming").textContent = upcoming;
+      qs("#statExpired").textContent = expired;
+
+      // saved kg metric (rough)
+      const savedKg = items.reduce((sum, i) => sum + qtyToKg(i.quantity), 0);
+      const metric = qs("#savedMetric");
+      metric.textContent = savedKg > 0 ? `${savedKg.toFixed(1)} kg of food saved` : "";
+    }
+
+    (async function init() {
+      const items = await fetchUserPosts();
+      renderPosts(items);
+    })();
+  </script>
+</body>
+</html>

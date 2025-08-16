@@ -1,0 +1,21 @@
+<header>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="login.html">Login</a>
+    <a href="register.html">Register</a>
+    <a href="feed.html">Feed</a>
+    <a href="profile.html">My Profile</a>
+    <a href="entry-form.html">Item Entry</a>
+    <a href="chat.html">ChatBox</a>
+    <button class="nav-btn" onclick="logout()">Logout</button>
+  </nav>
+</header>
+
+<!-- move script here (outside nav) -->
+<script>
+  function logout() {
+    localStorage.removeItem("token");
+    localStorage.removeItem("userId");
+    window.location.href = "login.html";
+  }
+</script>
