@@ -28,17 +28,27 @@ if (configureCloudinary()) {
 const app = express();
 
 // Middleware
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5500',
+  'http://127.0.0.1:5500',
+  'https://wastelessappignitionhacks-1.onrender.com',
+  'https://wastelessappignitionhacks-website.onrender.com',
+  'https://wastelessappignitionhacks-backend.onrender.com'
+];
+
 const corsOptions = {
-  origin: [
-    "http://127.0.0.1:5500", 
-    "http://localhost:5500",
-    "https://wastelessappignitionhacks-1.onrender.com",
-    "https://wastelessappignitionhacks-1.onrender.com/",
-    "https://wastelessappignitionhacks-website.onrender.com",
-    "https://wastelessappignitionhacks-website.onrender.com/",
-    "https://wastelessappignitionhacks-backend.onrender.com",
-    "https://wastelessappignitionhacks-backend.onrender.com/"
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -62,9 +72,23 @@ app.use('/api/chat', require('./routes/chatRoutes'));
 
 // Serve static files from the Frontend directory
 const frontendPath = path.join(__dirname, '../Frontend');
+
+// Enable CORS for all routes
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? 'https://your-render-url.onrender.com' 
+    : 'http://localhost:3000',
+  credentials: true
+}));
+
+// Body parser middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve static files
 app.use(express.static(frontendPath));
 
-// Handle SPA (Single Page Application) routing
+// Handle SPA routing - serve index.html for all routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
