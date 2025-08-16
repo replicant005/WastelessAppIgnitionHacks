@@ -9,7 +9,9 @@ const config = {
   get apiBase() {
     return this.isLocal 
       ? 'http://localhost:5000' 
-      : 'https://wastelessappignitionhacks-1.onrender.com';
+      : 'https://wastelessappignitionhacks-1.onrender.com',
+      "https://wastelessappignitionhacks-website.onrender.com"
+      ;
   },
   
   // Specific API endpoints
