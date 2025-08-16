@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 const connectDB = require('./config/db');
 const { configureCloudinary, testCloudinaryConnection } = require('./config/cloudinary');
 
@@ -28,12 +29,16 @@ const app = express();
 
 // Middleware
 const corsOptions = {
-  origin: ["http://127.0.0.1:5500", "http://localhost:5500"],
+  origin: [
+    "http://127.0.0.1:5500", 
+    "http://localhost:5500",
+    "https://wastelessappignitionhacks-1.onrender.com",
+    "https://wastelessappignitionhacks-1.onrender.com/"
+  ],
   credentials: true,
 };
 
 app.use(cors(corsOptions));
-
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -49,6 +54,15 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/food', require('./routes/foodRoutes'));
 app.use('/api/chat', require('./routes/chatRoutes'));
 
+// Serve static files from the Frontend directory
+const frontendPath = path.join(__dirname, '../Frontend');
+app.use(express.static(frontendPath));
+
+// Handle SPA (Single Page Application) routing
+app.get('*', (req, res) => {
+  res.sendFile(path.join(frontendPath, 'index.html'));
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
@@ -58,8 +72,13 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Root endpoint
+// Root endpoint - Serve frontend
 app.get('/', (req, res) => {
+  res.sendFile(path.join(frontendPath, 'index.html'));
+});
+
+// API info endpoint
+app.get('/api', (req, res) => {
   res.json({
     message: 'Welcome to Wasteless API',
     version: '1.0.0',
