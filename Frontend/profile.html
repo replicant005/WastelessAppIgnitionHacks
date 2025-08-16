@@ -146,7 +146,7 @@
 
     async function fetchUserPosts() {
       // try server-side filter first (if your API supports it)
-      const base = "http://localhost:5000/api/food";
+              const base = "https://wastelessappignitionhacks-1.onrender.com/api/food";
       const urls = userId ? [`${base}?user=${encodeURIComponent(userId)}`, base] : [base];
       for (const url of urls) {
         try {
